@@ -22,7 +22,7 @@ export function ChatPage() {
   const { user, profile } = useAuth()
   const location = useLocation()
   const messagesEndRef = useRef(null)
-  
+
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -115,29 +115,28 @@ export function ChatPage() {
         { role: 'user', content: userMessage }
       ]
 
-      // Llamar a la API de Anthropic
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          system: SYSTEM_PROMPT,
-          messages: apiMessages
-        })
-      })
+      // Llamar a la API de Google Gemini
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: apiMessages.map(m => ({
+              role: m.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: m.content }]
+            }))
+          })
+        }
+      )
 
       if (!response.ok) {
         throw new Error('Error en la API')
       }
 
       const data = await response.json()
-      const assistantMessage = data.content[0].text
+      const assistantMessage = data.candidates[0].content.parts[0].text
 
       // Agregar respuesta del asistente
       const newAssistantMessage = {
@@ -207,10 +206,10 @@ export function ChatPage() {
                 ¡Hola! Soy tu asistente de estudio
               </h3>
               <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                Puedo ayudarte con técnicas de estudio, organización del tiempo, 
+                Puedo ayudarte con técnicas de estudio, organización del tiempo,
                 preparación para exámenes y más. ¿En qué puedo ayudarte?
               </p>
-              
+
               {/* Sugerencias */}
               <div className="flex flex-wrap justify-center gap-2">
                 {sugerencias.map((sug, i) => (
@@ -250,7 +249,7 @@ export function ChatPage() {
                   )}
                 </div>
               ))}
-              
+
               {loading && (
                 <div className="flex gap-3">
                   <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -265,7 +264,7 @@ export function ChatPage() {
                   </div>
                 </div>
               )}
-              
+
               <div ref={messagesEndRef} />
             </>
           )}
