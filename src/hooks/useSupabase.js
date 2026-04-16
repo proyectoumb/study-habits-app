@@ -202,13 +202,42 @@ export function useEstadisticas() {
 }
 
 export function useMensajeMotivacional() {
+  const { profile } = useAuth()
   const [mensaje, setMensaje] = useState(null)
 
   useEffect(() => {
-    supabase.from('mensajes_motivacionales').select('*').eq('activo', true).then(({ data }) => {
+    const fetchMensaje = async () => {
+      // Intentar generar mensaje con Gemini
+      try {
+        const nombre = profile?.nombre || 'estudiante'
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                role: 'user',
+                parts: [{ text: `Genera un mensaje motivacional corto (máximo 2 oraciones) para un estudiante llamado ${nombre}. Solo devuelve el mensaje, sin comillas ni explicaciones adicionales.` }]
+              }]
+            })
+          }
+        )
+        if (!response.ok) throw new Error('Gemini error')
+        const data = await response.json()
+        const texto = data.candidates[0].content.parts[0].text.trim()
+        setMensaje({ mensaje: texto, autor: 'StudyBot ✨' })
+        return
+      } catch {
+        // Fallback: tabla estática de Supabase
+      }
+
+      const { data } = await supabase.from('mensajes_motivacionales').select('*').eq('activo', true)
       if (data && data.length > 0) setMensaje(data[Math.floor(Math.random() * data.length)])
-    })
-  }, [])
+    }
+
+    fetchMensaje()
+  }, [profile?.nombre])
 
   return { mensaje }
 }
