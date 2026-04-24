@@ -129,8 +129,18 @@ export function EstadisticasPage() {
                 <Target className="w-5 h-5 text-green-600" />
               </div>
             </div>
-            <p className="text-sm text-gray-500">Cumplimiento</p>
+            <p className="text-sm text-gray-500">Cumplimiento semanal</p>
             <p className="text-2xl font-semibold mt-1 text-green-600">{stats.cumplimiento}%</p>
+            <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  stats.cumplimiento >= 80 ? 'bg-green-500' :
+                  stats.cumplimiento >= 50 ? 'bg-amber-500' : 'bg-red-400'
+                }`}
+                style={{ width: `${stats.cumplimiento}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Horas reales vs. planificadas</p>
           </Card>
 
           <Card className="p-5">
