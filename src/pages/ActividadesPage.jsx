@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { useActividades, useMaterias } from '@/hooks/useSupabase'
+import { useActividades, useMaterias, useRegistrosEstudio } from '@/hooks/useSupabase'
 import { Card, Button, Badge, Spinner, EmptyState, Modal, Input, Select } from '@/components/ui'
 import { NuevaActividadModal } from '@/components/activities/NuevaActividadModal'
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Check, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Check,
+  Trash2,
   Edit2,
   Calendar,
   Clock,
-  ListTodo
+  ListTodo,
+  PlayCircle
 } from 'lucide-react'
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -21,9 +21,11 @@ export function ActividadesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showNuevaActividad, setShowNuevaActividad] = useState(false)
   const [editingActividad, setEditingActividad] = useState(null)
-  
+  const [registrandoActividad, setRegistrandoActividad] = useState(null)
+
   const { actividades, loading, createActividad, toggleCompletada, deleteActividad, updateActividad } = useActividades(filtros)
   const { materias } = useMaterias()
+  const { createRegistro } = useRegistrosEstudio()
 
   const actividadesFiltradas = actividades.filter(a => 
     a.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -206,14 +208,23 @@ export function ActividadesPage() {
                   {/* Acciones */}
                   <div className="flex items-center gap-1">
                     <button
+                      onClick={() => setRegistrandoActividad(actividad)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Registrar horas reales"
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => setEditingActividad(actividad)}
                       className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Editar actividad"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(actividad.id)}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar actividad"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -242,6 +253,19 @@ export function ActividadesPage() {
           onSave={async (updates) => {
             await updateActividad(editingActividad.id, updates)
             setEditingActividad(null)
+          }}
+        />
+      )}
+
+      {/* Modal registrar horas reales */}
+      {registrandoActividad && (
+        <RegistrarHorasModal
+          actividad={registrandoActividad}
+          onClose={() => setRegistrandoActividad(null)}
+          onSave={async (registro) => {
+            const { error } = await createRegistro({ ...registro, actividad_id: registrandoActividad.id })
+            if (!error) setRegistrandoActividad(null)
+            return { error }
           }}
         />
       )}
@@ -367,6 +391,104 @@ function EditActividadModal({ actividad, materias, onClose, onSave }) {
           </Button>
           <Button type="submit" className="flex-1" loading={loading}>
             Guardar cambios
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Modal para registrar horas reales de estudio (RF6)
+function RegistrarHorasModal({ actividad, onClose, onSave }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [formData, setFormData] = useState({
+    fecha: format(new Date(), 'yyyy-MM-dd'),
+    horas: '',
+    notas: ''
+  })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!formData.horas || parseFloat(formData.horas) <= 0) {
+      setError('Ingresa un valor de horas mayor a 0.')
+      return
+    }
+    setError(null)
+    setLoading(true)
+    const { error } = await onSave({
+      fecha: formData.fecha,
+      horas: parseFloat(formData.horas),
+      notas: formData.notas || null
+    })
+    if (error) setError(error.message)
+    setLoading(false)
+  }
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Registrar horas reales">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Actividad de referencia */}
+        <div className="p-3 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-500 mb-0.5">Actividad</p>
+          <p className="text-sm font-medium text-gray-900">{actividad.titulo}</p>
+          {actividad.horas_planificadas > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              <Clock className="w-3 h-3 inline mr-1" />
+              {actividad.horas_planificadas}h planificadas
+            </p>
+          )}
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg">{error}</div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Fecha *"
+            name="fecha"
+            type="date"
+            value={formData.fecha}
+            onChange={handleChange}
+            required
+          />
+          <Input
+            label="Horas estudiadas *"
+            name="horas"
+            type="number"
+            step="0.25"
+            min="0.25"
+            max="24"
+            value={formData.horas}
+            onChange={handleChange}
+            placeholder="Ej: 1.5"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="label">Notas (opcional)</label>
+          <textarea
+            name="notas"
+            value={formData.notas}
+            onChange={handleChange}
+            className="input min-h-[70px] resize-none"
+            placeholder="¿Qué trabajaste en esta sesión?"
+          />
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" className="flex-1" loading={loading}>
+            Guardar registro
           </Button>
         </div>
       </form>
