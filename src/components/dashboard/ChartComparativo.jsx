@@ -1,11 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 export function ChartComparativo({ data }) {
-  // Transformar datos para incluir horas planificadas (mock por ahora)
   const chartData = data.map(item => ({
     ...item,
-    planificadas: Math.max(item.horas + Math.random() * 2 - 1, 0).toFixed(1),
-    reales: item.horas.toFixed(1)
+    planificadas: parseFloat(item.planificadas || 0).toFixed(1),
+    reales: parseFloat(item.horas || 0).toFixed(1)
   }))
 
   return (
