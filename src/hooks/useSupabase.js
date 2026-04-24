@@ -146,14 +146,26 @@ export function useEstadisticas() {
     if (!user) return
     setLoading(true)
     try {
-        const { data: actividadesStats } = await supabase
-          .from('estadisticas_actividades').select('*').eq('user_id', user.id).single()
-
         const hace7Dias = new Date()
         hace7Dias.setDate(hace7Dias.getDate() - 7)
-        const { data: registrosSemana } = await supabase
-          .from('registros_estudio').select('fecha, horas')
-          .gte('fecha', hace7Dias.toISOString().split('T')[0])
+        const fechaInicio = hace7Dias.toISOString().split('T')[0]
+
+        const [{ data: registrosSemana }, { data: actividadesSemana }, { data: actividadesPendientes }] =
+          await Promise.all([
+            supabase.from('registros_estudio').select('fecha, horas').gte('fecha', fechaInicio),
+            supabase.from('actividades').select('fecha_limite, horas_planificadas')
+              .gte('fecha_limite', fechaInicio)
+              .not('horas_planificadas', 'is', null)
+              .gt('horas_planificadas', 0),
+            supabase.from('actividades').select('id').eq('completada', false)
+          ])
+
+        // RF11: % cumplimiento = horas reales / horas planificadas esta semana
+        const horasRealesSemana = registrosSemana?.reduce((s, r) => s + parseFloat(r.horas), 0) || 0
+        const horasPlanificadasSemana = actividadesSemana?.reduce((s, a) => s + parseFloat(a.horas_planificadas || 0), 0) || 0
+        const cumplimiento = horasPlanificadasSemana > 0
+          ? Math.min(Math.round((horasRealesSemana / horasPlanificadasSemana) * 100), 100)
+          : 0
 
         const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         const horasPorDiaMap = {}
@@ -161,10 +173,16 @@ export function useEstadisticas() {
           const fecha = new Date()
           fecha.setDate(fecha.getDate() - i)
           const fechaStr = fecha.toISOString().split('T')[0]
-          horasPorDiaMap[fechaStr] = { dia: diasSemana[fecha.getDay()], fecha: fechaStr, horas: 0 }
+          horasPorDiaMap[fechaStr] = { dia: diasSemana[fecha.getDay()], fecha: fechaStr, horas: 0, planificadas: 0 }
         }
         registrosSemana?.forEach(r => {
           if (horasPorDiaMap[r.fecha]) horasPorDiaMap[r.fecha].horas += parseFloat(r.horas)
+        })
+        actividadesSemana?.forEach(a => {
+          const fechaAct = a.fecha_limite?.split('T')[0]
+          if (fechaAct && horasPorDiaMap[fechaAct]) {
+            horasPorDiaMap[fechaAct].planificadas += parseFloat(a.horas_planificadas || 0)
+          }
         })
 
         const hace30Dias = new Date()
@@ -183,9 +201,9 @@ export function useEstadisticas() {
         }
 
         setStats({
-          horasSemana: registrosSemana?.reduce((s, r) => s + parseFloat(r.horas), 0) || 0,
-          cumplimiento: actividadesStats?.porcentaje_cumplimiento || 0,
-          pendientes: actividadesStats?.pendientes || 0,
+          horasSemana: horasRealesSemana,
+          cumplimiento,
+          pendientes: actividadesPendientes?.length || 0,
           racha
         })
         setHorasPorDia(Object.values(horasPorDiaMap))
